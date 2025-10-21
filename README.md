@@ -12,23 +12,14 @@ Both contracts are verified on Etherscan.
 ## Quick Start
 
 ```bash
-pnpm i   # or npm i / yarn
-pnpm dev # http://localhost:5173
-```
-
-### Optional env
-Create `.env` at project root:
-
-```ini
-VITE_RPC_URL=https://1rpc.io/sepolia
-VITE_SELLER=0x... # if you want admin buttons to show; the contract itself enforces auth
+npm i   # or npm i / yarn
+npm run dev # http://localhost:5173
 ```
 
 ## What the UI shows
 - Current price, time remaining, start/reserve prices, total tokens, my bid, whether ended, clearing price, my token balance.
-- Actions: **Place Bid (payable)**, **Claim Tokens**, **Withdraw Ether**, **Burn Unsold Tokens**, **End Auction**.
+- Actions: **Place Bid (payable)**.
 
 ## Notes
 - Network required: **Sepolia (chainId 11155111)**.
-- If no wallet is installed, the UI falls back to a public Sepolia RPC (read-only).
 - ABIs were constructed from verified sources on Etherscan.
