@@ -27,6 +27,9 @@ type AuctionState = {
   tokensAtAuction?: string;        // token balance currently at auction addr
   tokensSold?: string;             // totalTokens - tokensAtAuction
   soldPct?: number;                // %
+
+  startTime?: number;
+  auctionDuration?: number;
 };
 
 export function useAuction() {
@@ -115,6 +118,18 @@ export function useAuction() {
         timeRemaining = Math.max(0, endTs - now);
       }
 
+      const [startTimeBN, durationBN] = await Promise.all([
+        auction.startTime(),
+        auction.AUCTION_DURATION?.().catch(() => 20 * 60),
+      ]);
+
+      console.log('startTimeBN', startTimeBN)
+      console.log('durationBN', durationBN)
+
+      const startTime = Number(startTimeBN);
+      const auctionDuration =
+      typeof durationBN === "bigint" ? Number(durationBN) : Number(durationBN);
+
       // formatters
       const dec = Number(tokenDecimals);
       const fmtEth = (x: bigint | number) => ethers.formatEther(x);
@@ -149,6 +164,8 @@ export function useAuction() {
         tokensAtAuction,
         tokensSold,
         soldPct,
+        startTime,
+        auctionDuration,
       });
     } catch (err) {
       console.error("refreshStatus error:", err);
@@ -192,6 +209,19 @@ export function useAuction() {
     await refreshStatus();
   }, [refreshStatus]);
 
+  // 🏁 End the auction (seller or after time elapsed)
+  const endAuction = useCallback(async () => {
+    if (!(window as any).ethereum) throw new Error("MetaMask not detected");
+    const provider = new ethers.BrowserProvider((window as any).ethereum);
+    await provider.send("eth_requestAccounts", []);
+    const signer = await provider.getSigner();
+    const auction = new ethers.Contract(AUCTION_ADDRESS, auctionAbi, signer);
+    const tx = await auction.endAuction();
+    await tx.wait();
+    await refreshStatus();
+  }, [refreshStatus]);
+
+
   // initial load
   useEffect(() => {
     refreshStatus();
@@ -205,5 +235,7 @@ export function useAuction() {
     claimTokens,
     requestRefund,
     refreshStatus,
+    endAuction
   };
+
 }

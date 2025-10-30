@@ -19,10 +19,13 @@ export default function App() {
     tokenSymbol,
     soldPct,
     auctionEnded,
+    startTime,
+    auctionDuration,
     placeBid,
     claimTokens,
     requestRefund,
     refreshStatus,
+    endAuction
   } = useAuction();
 
   const [account, setAccount] = useState<string | null>(null);
@@ -30,6 +33,20 @@ export default function App() {
   const [amount, setAmount] = useState("");
 
   const disabled = !account || !networkOk;
+
+  const [computedRemaining, setComputedRemaining] = useState<number>(0);
+
+  useEffect(() => {
+    if (!startTime || !auctionDuration) return;
+    const tick = () => {
+      const now = Math.floor(Date.now() / 1000);
+      const rem = Math.max(0, startTime + auctionDuration - now);
+      setComputedRemaining(rem);
+    };
+    tick(); // initial compute
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [startTime, auctionDuration]);
 
   // Live ticking countdown
   const [tick, setTick] = useState(0);
@@ -39,11 +56,11 @@ export default function App() {
   }, []);
   const timeLeftStr = useMemo(() => {
     const s = (timeRemaining ?? 0) - tick;
-    if (s <= 0) return "Ended";
+    if (s <= 0 || auctionEnded) return "Ended";
     const m = Math.floor(s / 60);
     const sec = s % 60;
     return `${m}m ${sec}s`;
-  }, [timeRemaining, tick]);
+  }, [timeRemaining, tick, auctionEnded]);
 
   // 🦊 Connect wallet
   async function connectWallet() {
@@ -102,7 +119,7 @@ export default function App() {
         toast.error("Please switch to Sepolia Testnet manually.");
       }
     }
-  }
+  } 
 
   // Detect wallet/network changes
   useEffect(() => {
@@ -278,7 +295,16 @@ export default function App() {
           }}
         >
           <Card title="Current Price" value={fmtEth(currentPrice)} />
-          <Card title="Time Remaining" value={timeLeftStr} />
+          <Card
+            title="Time Remaining"
+            value={
+              auctionEnded
+                ? "Ended"
+                : computedRemaining > 0
+                  ? `${Math.floor(computedRemaining / 60)}m ${computedRemaining % 60}s`
+                  : "Ended"
+            }
+          />
           <Card title="Start / Reserve" value={`${fmtEth(startPrice)} → ${fmtEth(reservePrice)}`} />
           <Card title="Total Tokens" value={fmtTok(totalTokens)} />
           <Card title="Sold (approx)" value={soldPct !== undefined ? `${soldPct.toFixed(1)}%` : "—"} />
@@ -306,33 +332,40 @@ export default function App() {
             disabled={disabled}
           />
           <button
-            disabled={disabled}
+            disabled={disabled || auctionEnded}
             onClick={() => guardAction(() => placeBid(amount), "Bid")}
-            style={disabled ? btnStyleDisabled : btnStyle}
+            style={(disabled || auctionEnded) ? btnStyleDisabled : btnStyle}
           >
             Place Bid
           </button>
           <button
-            disabled={disabled}
+            disabled={disabled || !auctionEnded}
             onClick={() => guardAction(claimTokens, "Claim")}
-            style={disabled ? btnStyleDisabled : btnStyle}
+            style={(disabled || !auctionEnded) ? btnStyleDisabled : btnStyle}
           >
             Claim Tokens
           </button>
-          <button
+          {/* <button
             disabled={disabled}
             onClick={() => guardAction(requestRefund, "Refund")}
             style={disabled ? btnStyleDisabled : btnStyle}
           >
             Request Refund
-          </button>
+          </button> */}
           <button
+            disabled={disabled || auctionEnded}
+            onClick={() => guardAction(endAuction, "Auction ended")}
+            style={(disabled || auctionEnded) ? btnStyleDisabled : btnStyle}
+          >
+            End Auction
+          </button>
+          {/* <button
             disabled={disabled}
             onClick={refreshStatus}
             style={disabled ? btnStyleDisabled : btnStyle}
           >
             Refresh Data
-          </button>
+          </button> */}
         </div>
 
         <div style={{ marginTop: 24, fontSize: 13, opacity: 0.75 }}>
