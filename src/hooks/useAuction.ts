@@ -221,11 +221,62 @@ export function useAuction() {
     await refreshStatus();
   }, [refreshStatus]);
 
+  // 🟢 Start the auction (seller only)
+  const startAuction = useCallback(async () => {
+    if (!(window as any).ethereum) throw new Error("MetaMask not detected");
+    const provider = new ethers.BrowserProvider((window as any).ethereum);
+    await provider.send("eth_requestAccounts", []);
+    const signer = await provider.getSigner();
+    const auction = new ethers.Contract(AUCTION_ADDRESS, auctionAbi, signer);
+    const tx = await auction.start();
+    await tx.wait();
+    await refreshStatus();
+  }, [refreshStatus]);
 
   // initial load
   useEffect(() => {
     refreshStatus();
   }, [refreshStatus]);
+
+  // ⏱️ Live update the current price every second while auction is running
+  useEffect(() => {
+    let interval: any;
+
+    async function tickPriceAndTime() {
+      try {
+        const { auction } = await getContracts();
+
+        // Read minimal on-chain data
+        const [started, ended] = await Promise.all([
+          auction.started?.().catch(() => true),
+          auction.auctionEnded?.().catch(() => false),
+        ]);
+
+        if (!started || ended) return;
+
+        // Fetch current price and remaining time directly from contract
+        const [priceBN, timeRemBN] = await Promise.all([
+          auction.getCurrentPrice(),
+          auction.getTimeRemaining?.().catch(() => null),
+        ]);
+
+        const price = ethers.formatEther(priceBN);
+        const timeRemaining = timeRemBN ? Number(timeRemBN) : undefined;
+
+        // ✅ Update both together so UI stays perfectly in sync
+        setState((prev) => ({
+          ...prev,
+          currentPrice: price,
+          timeRemaining,
+        }));
+      } catch (err) {
+        console.warn("Live price/time update error:", err);
+      }
+    }
+
+    interval = setInterval(tickPriceAndTime, 1000);
+    return () => clearInterval(interval);
+  }, [getContracts]);
 
   return {
     // state
@@ -235,7 +286,8 @@ export function useAuction() {
     claimTokens,
     requestRefund,
     refreshStatus,
-    endAuction
+    endAuction,
+    startAuction
   };
 
 }

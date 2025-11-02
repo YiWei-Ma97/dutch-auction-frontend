@@ -25,7 +25,8 @@ export default function App() {
     claimTokens,
     requestRefund,
     refreshStatus,
-    endAuction
+    endAuction,
+    startAuction
   } = useAuction();
 
   const [account, setAccount] = useState<string | null>(null);
@@ -345,6 +346,13 @@ export default function App() {
           >
             Claim Tokens
           </button>
+          <button
+            disabled={disabled || !auctionEnded}
+            onClick={() => guardAction(startAuction, "Auction started")}
+            style={disabled || !auctionEnded ? btnStyleDisabled : btnStyle}
+          >
+            Start Auction
+          </button>
           {/* <button
             disabled={disabled}
             onClick={() => guardAction(requestRefund, "Refund")}
@@ -352,13 +360,13 @@ export default function App() {
           >
             Request Refund
           </button> */}
-          <button
+          {/* <button
             disabled={disabled || auctionEnded}
             onClick={() => guardAction(endAuction, "Auction ended")}
             style={(disabled || auctionEnded) ? btnStyleDisabled : btnStyle}
           >
             End Auction
-          </button>
+          </button> */}
           {/* <button
             disabled={disabled}
             onClick={refreshStatus}
