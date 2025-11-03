@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-// import { useAuction } from "@/hooks/useAuction";
 import { Toaster, toast } from "react-hot-toast";
-// import { SEPOLIA_CHAIN_ID } from "@/lib/config";
 import { ethers } from "ethers";
 import { useAuction } from "../hooks/useAuction";
 import { SEPOLIA_CHAIN_ID } from "../config";
@@ -19,11 +17,12 @@ export default function App() {
     tokenSymbol,
     soldPct,
     auctionEnded,
+    started,
     startTime,
     auctionDuration,
+    seller,
     placeBid,
     claimTokens,
-    requestRefund,
     refreshStatus,
     endAuction,
     startAuction
@@ -35,6 +34,10 @@ export default function App() {
 
   const disabled = !account || !networkOk;
 
+  // Check if connected account is the seller
+  const isSeller = account && seller && 
+    account.toLowerCase() === seller.toLowerCase();
+
   const [computedRemaining, setComputedRemaining] = useState<number>(0);
 
   useEffect(() => {
@@ -44,7 +47,7 @@ export default function App() {
       const rem = Math.max(0, startTime + auctionDuration - now);
       setComputedRemaining(rem);
     };
-    tick(); // initial compute
+    tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [startTime, auctionDuration]);
@@ -55,13 +58,6 @@ export default function App() {
     const id = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(id);
   }, []);
-  const timeLeftStr = useMemo(() => {
-    const s = (timeRemaining ?? 0) - tick;
-    if (s <= 0 || auctionEnded) return "Ended";
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return `${m}m ${sec}s`;
-  }, [timeRemaining, tick, auctionEnded]);
 
   // 🦊 Connect wallet
   async function connectWallet() {
@@ -76,7 +72,7 @@ export default function App() {
       else {
         setNetworkOk(true);
         toast.success("🦊 Wallet connected");
-        setTimeout(() => refreshStatus(), 500); // wait briefly for provider sync
+        setTimeout(() => refreshStatus(), 500);
       }
       refreshStatus();
     } catch {
@@ -112,7 +108,7 @@ export default function App() {
           });
           setNetworkOk(true);
           toast.success("✅ Sepolia network added!");
-          setTimeout(() => refreshStatus(), 500); // wait briefly for provider sync
+          setTimeout(() => refreshStatus(), 500);
         } catch {
           toast.error("Failed to add Sepolia network.");
         }
@@ -124,40 +120,40 @@ export default function App() {
 
   // Detect wallet/network changes
   useEffect(() => {
-  if (!(window as any).ethereum) return;
-  const eth = (window as any).ethereum;
+    if (!(window as any).ethereum) return;
+    const eth = (window as any).ethereum;
 
-  const handleAcc = async (accounts: string[]) => {
-    setAccount(accounts[0] || null);
-    if (accounts.length > 0) {
-      try {
-        await refreshStatus(); // ✅ refresh immediately on new wallet connection
-      } catch (err) {
-        console.warn("Failed to refresh after account change:", err);
+    const handleAcc = async (accounts: string[]) => {
+      setAccount(accounts[0] || null);
+      if (accounts.length > 0) {
+        try {
+          await refreshStatus();
+        } catch (err) {
+          console.warn("Failed to refresh after account change:", err);
+        }
       }
-    }
-  };
+    };
 
-  const handleChain = async (chainId: string) => {
-    const ok = parseInt(chainId, 16) === SEPOLIA_CHAIN_ID;
-    setNetworkOk(ok);
-    if (ok && account) {
-      try {
-        await refreshStatus(); // ✅ refresh instantly after switching to Sepolia
-      } catch (err) {
-        console.warn("Failed to refresh after chain switch:", err);
+    const handleChain = async (chainId: string) => {
+      const ok = parseInt(chainId, 16) === SEPOLIA_CHAIN_ID;
+      setNetworkOk(ok);
+      if (ok && account) {
+        try {
+          await refreshStatus();
+        } catch (err) {
+          console.warn("Failed to refresh after chain switch:", err);
+        }
       }
-    }
-  };
+    };
 
-  eth.on("accountsChanged", handleAcc);
-  eth.on("chainChanged", handleChain);
+    eth.on("accountsChanged", handleAcc);
+    eth.on("chainChanged", handleChain);
 
-  return () => {
-    eth.removeListener("accountsChanged", handleAcc);
-    eth.removeListener("chainChanged", handleChain);
-  };
-}, [account, refreshStatus]);
+    return () => {
+      eth.removeListener("accountsChanged", handleAcc);
+      eth.removeListener("chainChanged", handleChain);
+    };
+  }, [account, refreshStatus]);
 
   // 🧭 On page load, check if already connected
   useEffect(() => {
@@ -210,12 +206,10 @@ export default function App() {
 
         {/* ---- Wallet Connection Section ---- */}
         {!account ? (
-          // show Connect button only when not connected
           <button onClick={connectWallet} style={btnStyle}>
             🦊 Connect Wallet
           </button>
         ) : (
-          // once connected, show address & status instead
           <div
             style={{
               marginTop: 10,
@@ -224,6 +218,7 @@ export default function App() {
               display: "flex",
               alignItems: "center",
               gap: 8,
+              flexWrap: "wrap"
             }}
           >
             <span>Connected:</span>
@@ -238,6 +233,21 @@ export default function App() {
             >
               {account.slice(0, 8)}...{account.slice(-6)}
             </span>
+            {isSeller && (
+              <span
+                style={{
+                  color: "#f59e0b",
+                  fontWeight: 600,
+                  fontSize: 12,
+                  background: "#451a03",
+                  border: "1px solid #78350f",
+                  borderRadius: 6,
+                  padding: "2px 6px",
+                }}
+              >
+                👑 Admin
+              </span>
+            )}
             {networkOk ? (
               <span
                 style={{
@@ -332,48 +342,49 @@ export default function App() {
             }}
             disabled={disabled}
           />
-          <button
-            disabled={disabled || auctionEnded}
-            onClick={() => guardAction(() => placeBid(amount), "Bid")}
-            style={(disabled || auctionEnded) ? btnStyleDisabled : btnStyle}
-          >
-            Place Bid
-          </button>
-          <button
-            disabled={disabled || !auctionEnded}
-            onClick={() => guardAction(claimTokens, "Claim")}
-            style={(disabled || !auctionEnded) ? btnStyleDisabled : btnStyle}
-          >
-            Claim Tokens
-          </button>
-          <button
-            disabled={disabled || !auctionEnded}
-            onClick={() => guardAction(startAuction, "Auction started")}
-            style={disabled || !auctionEnded ? btnStyleDisabled : btnStyle}
-          >
-            Start Auction
-          </button>
-          {/* <button
-            disabled={disabled}
-            onClick={() => guardAction(requestRefund, "Refund")}
-            style={disabled ? btnStyleDisabled : btnStyle}
-          >
-            Request Refund
-          </button> */}
-          {/* <button
-            disabled={disabled || auctionEnded}
-            onClick={() => guardAction(endAuction, "Auction ended")}
-            style={(disabled || auctionEnded) ? btnStyleDisabled : btnStyle}
-          >
-            End Auction
-          </button> */}
-          {/* <button
-            disabled={disabled}
-            onClick={refreshStatus}
-            style={disabled ? btnStyleDisabled : btnStyle}
-          >
-            Refresh Data
-          </button> */}
+          
+          {/* Buyer Buttons - Only visible to non-sellers */}
+          {!isSeller && (
+            <>
+              <button
+                disabled={disabled || auctionEnded || !started}
+                onClick={() => guardAction(() => placeBid(amount), "Bid")}
+                style={(disabled || auctionEnded || !started) ? btnStyleDisabled : btnStyle}
+              >
+                Place Bid
+              </button>
+              
+              <button
+                disabled={disabled || !auctionEnded}
+                onClick={() => guardAction(claimTokens, "Claim")}
+                style={(disabled || !auctionEnded) ? btnStyleDisabled : btnStyle}
+              >
+                Claim Tokens
+              </button>
+            </>
+          )}
+          
+          {/* Admin Buttons - Only visible to seller */}
+          {isSeller && (
+            <>
+              <button
+                disabled={disabled || started}
+                onClick={() => guardAction(startAuction, "Auction started")}
+                style={(disabled || started) ? btnStyleDisabled : btnStyle}
+              >
+                🟢 Start Auction
+              </button>
+              
+              <button
+                disabled={disabled || auctionEnded || (computedRemaining > 0)}
+                onClick={() => guardAction(endAuction, "Auction ended")}
+                style={(disabled || auctionEnded || computedRemaining > 0) ? btnStyleDisabled : btnStyle}
+                title={computedRemaining > 0 ? "Can only end after 20 minutes or when sold out" : "End auction and set clearing price"}
+              >
+                🛑 End Auction
+              </button>
+            </>
+          )}
         </div>
 
         <div style={{ marginTop: 24, fontSize: 13, opacity: 0.75 }}>
@@ -382,6 +393,7 @@ export default function App() {
             <a
               href="https://sepolia.etherscan.io/address/0x47f8f48Fc99DEfc2A3D3655Aea02DE678030742e#code"
               target="_blank"
+              rel="noopener noreferrer"
             >
               Auction
             </a>{" "}
@@ -389,6 +401,7 @@ export default function App() {
             <a
               href="https://sepolia.etherscan.io/address/0x61df7fFF1F7c9e0F66c733E4B119b6C1FE7B0a74#code"
               target="_blank"
+              rel="noopener noreferrer"
             >
               Token
             </a>

@@ -17,6 +17,7 @@ type AuctionState = {
   tokenSymbol?: string;
   tokenDecimals: number;
   auctionEnded: boolean;
+  started: boolean;
   clearingPrice?: string;          // ETH
 
   // user metrics
@@ -30,12 +31,16 @@ type AuctionState = {
 
   startTime?: number;
   auctionDuration?: number;
+  
+  // admin
+  seller?: string;                 // seller/admin address
 };
 
 export function useAuction() {
   const [state, setState] = useState<AuctionState>({
     tokenDecimals: 18,
     auctionEnded: false,
+    started: false,
   });
 
   // Provider/signer + contracts (ethers v6)
@@ -50,7 +55,7 @@ export function useAuction() {
     let signer: ethers.Signer | null = null;
     try {
       signer = await provider.getSigner();
-      // if not connected yet, this may throw; we’ll treat as read-only
+      // if not connected yet, this may throw; we'll treat as read-only
     } catch {
       signer = null;
     }
@@ -71,11 +76,8 @@ export function useAuction() {
         userAddr = null;
       }
 
-      // Parallel reads
+      // Parallel reads - First batch (basic auction info)
       const [
-        currentPriceBN,
-        // prefer getTimeRemaining() if contract has it; otherwise compute from timestamps
-        timeRemMaybe,
         startPriceBN,
         reservePriceBN,
         totalTokensBN,
@@ -86,10 +88,9 @@ export function useAuction() {
         auctionTokenBalBN,
         myBidBN,
         myTokenBalBN,
+        sellerAddress,
+        started,
       ] = await Promise.all([
-        auction.getCurrentPrice(),
-        // if missing, this call will throw; we’ll catch below and compute
-        auction.getTimeRemaining?.().catch(() => null),
         auction.startPrice(),
         auction.reservePrice(),
         auction.totalTokens(),
@@ -100,6 +101,14 @@ export function useAuction() {
         token.balanceOf(AUCTION_ADDRESS),
         userAddr ? auction.bids(userAddr) : Promise.resolve(0n),
         userAddr ? token.balanceOf(userAddr) : Promise.resolve(0n),
+        auction.seller(),
+        auction.started?.().catch(() => false), // check if auction has started
+      ]);
+
+      // Second batch - getCurrentPrice (may fail if not started, so handle separately)
+      const [currentPriceBN, timeRemMaybe] = await Promise.all([
+        auction.getCurrentPrice().catch(() => startPriceBN), // if not started, show startPrice
+        auction.getTimeRemaining?.().catch(() => null),
       ]);
 
       // time remaining: fallback compute if method not available
@@ -161,11 +170,13 @@ export function useAuction() {
         myBid,
         myTokenBal,
         auctionEnded,
+        started,
         tokensAtAuction,
         tokensSold,
         soldPct,
         startTime,
         auctionDuration,
+        seller: sellerAddress,
       });
     } catch (err) {
       console.error("refreshStatus error:", err);
@@ -209,7 +220,7 @@ export function useAuction() {
     await refreshStatus();
   }, [refreshStatus]);
 
-  // 🏁 End the auction (seller or after time elapsed)
+  // 🛑 End the auction (seller or after time elapsed)
   const endAuction = useCallback(async () => {
     if (!(window as any).ethereum) throw new Error("MetaMask not detected");
     const provider = new ethers.BrowserProvider((window as any).ethereum);
