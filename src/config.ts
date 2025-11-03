@@ -1,8 +1,8 @@
 
 export const SEPOLIA_CHAIN_ID = 11155111;
 
-export const TOKEN_ADDRESS = '0x61df7fFF1F7c9e0F66c733E4B119b6C1FE7B0a74';
-export const AUCTION_ADDRESS = '0xBac87183dae6cd9BC17cdE9C66DFE1351b603323';
+export const TOKEN_ADDRESS = '0x739b2218E045C38C64195Db7d37b7010bBcb81D6';
+export const AUCTION_ADDRESS = '0x5b05D77E1eb6D296FFCC044AD44FF139E4363f12';
 
 // Optional: set VITE_RPC_URL in .env to use your own provider; otherwise Metamask provider is used.
 export const FALLBACK_RPC = import.meta.env.VITE_RPC_URL || 'https://1rpc.io/sepolia';
