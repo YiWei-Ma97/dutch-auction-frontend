@@ -1,11 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { ethers } from "ethers";
 import { AUCTION_ADDRESS, SEPOLIA_CHAIN_ID, TOKEN_ADDRESS } from "../config";
-// import auctionAbi from "@/lib/abis/dutchauction.json";
-// import tokenAbi from "@/lib/abis/hashthreetoken.json";
-import auctionAbi from '../lib/abis/dutchauction.json'
-import tokenAbi from '../lib/abis/erc20.json'
-// import { AUCTION_ADDRESS, TOKEN_ADDRESS, SEPOLIA_CHAIN_ID } from "@/lib/config";
+import auctionAbi from "../lib/abis/dutchauction.json";
+import tokenAbi from "../lib/abis/erc20.json";
 
 type AuctionState = {
   // headline metrics
@@ -31,7 +28,7 @@ type AuctionState = {
 
   startTime?: number;
   auctionDuration?: number;
-  
+
   // admin
   seller?: string;                 // seller/admin address
 };
@@ -132,12 +129,9 @@ export function useAuction() {
         auction.AUCTION_DURATION?.().catch(() => 20 * 60),
       ]);
 
-      console.log('startTimeBN', startTimeBN)
-      console.log('durationBN', durationBN)
-
       const startTime = Number(startTimeBN);
       const auctionDuration =
-      typeof durationBN === "bigint" ? Number(durationBN) : Number(durationBN);
+        typeof durationBN === "bigint" ? Number(durationBN) : Number(durationBN);
 
       // formatters
       const dec = Number(tokenDecimals);
@@ -184,16 +178,19 @@ export function useAuction() {
   }, [getContracts]);
 
   // write: place bid
-  const placeBid = useCallback(async (ethAmount: string) => {
-    if (!(window as any).ethereum) throw new Error("MetaMask not detected");
-    const provider = new ethers.BrowserProvider((window as any).ethereum);
-    await provider.send("eth_requestAccounts", []);
-    const signer = await provider.getSigner();
-    const auction = new ethers.Contract(AUCTION_ADDRESS, auctionAbi, signer);
-    const tx = await auction.bid({ value: ethers.parseEther(ethAmount) });
-    await tx.wait();
-    await refreshStatus();
-  }, [refreshStatus]);
+  const placeBid = useCallback(
+    async (ethAmount: string) => {
+      if (!(window as any).ethereum) throw new Error("MetaMask not detected");
+      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      await provider.send("eth_requestAccounts", []);
+      const signer = await provider.getSigner();
+      const auction = new ethers.Contract(AUCTION_ADDRESS, auctionAbi, signer);
+      const tx = await auction.bid({ value: ethers.parseEther(ethAmount) });
+      await tx.wait();
+      await refreshStatus();
+    },
+    [refreshStatus]
+  );
 
   // write: claim tokens
   const claimTokens = useCallback(async () => {
@@ -240,6 +237,30 @@ export function useAuction() {
     const signer = await provider.getSigner();
     const auction = new ethers.Contract(AUCTION_ADDRESS, auctionAbi, signer);
     const tx = await auction.start();
+    await tx.wait();
+    await refreshStatus();
+  }, [refreshStatus]);
+
+  // 🔥 Burn unsold tokens (seller only, after end)
+  const burnUnsoldTokens = useCallback(async () => {
+    if (!(window as any).ethereum) throw new Error("MetaMask not detected");
+    const provider = new ethers.BrowserProvider((window as any).ethereum);
+    await provider.send("eth_requestAccounts", []);
+    const signer = await provider.getSigner();
+    const auction = new ethers.Contract(AUCTION_ADDRESS, auctionAbi, signer);
+    const tx = await auction.burnUnsoldTokens();
+    await tx.wait();
+    await refreshStatus();
+  }, [refreshStatus]);
+
+  // 💸 Withdraw raised ETH (seller only, after end)
+  const withdrawFunds = useCallback(async () => {
+    if (!(window as any).ethereum) throw new Error("MetaMask not detected");
+    const provider = new ethers.BrowserProvider((window as any).ethereum);
+    await provider.send("eth_requestAccounts", []);
+    const signer = await provider.getSigner();
+    const auction = new ethers.Contract(AUCTION_ADDRESS, auctionAbi, signer);
+    const tx = await auction.withdrawFunds();
     await tx.wait();
     await refreshStatus();
   }, [refreshStatus]);
@@ -298,7 +319,8 @@ export function useAuction() {
     requestRefund,
     refreshStatus,
     endAuction,
-    startAuction
+    startAuction,
+    burnUnsoldTokens,
+    withdrawFunds,
   };
-
 }
