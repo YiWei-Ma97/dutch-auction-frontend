@@ -3,6 +3,7 @@ import { Toaster, toast } from "react-hot-toast";
 import { ethers } from "ethers";
 import { useAuction } from "../hooks/useAuction";
 import { SEPOLIA_CHAIN_ID } from "../config";
+import LinearProgress from '@mui/material/LinearProgress';
 
 export default function App() {
   const {
@@ -40,6 +41,7 @@ export default function App() {
   const isSeller = !!(account && seller && account.toLowerCase() === seller.toLowerCase());
 
   const [computedRemaining, setComputedRemaining] = useState<number>(0);
+  const [loadingAction, setLoadingAction] = useState(false);
 
   useEffect(() => {
     if (!startTime || !auctionDuration) return;
@@ -187,10 +189,13 @@ export default function App() {
     if (!account) return toast.error("Please connect your wallet first 🦊");
     if (!networkOk) return toast.error("Please switch to Sepolia Testnet 🌐");
     try {
+      setLoadingAction(true);
       await fn();
+      setLoadingAction(false);
       toast.success(`${label} successful ✅`);
       refreshStatus();
     } catch (e: any) {
+      setLoadingAction(false);
       toast.error(e?.reason || e?.message || `${label} failed ❌`);
     }
   };
@@ -350,17 +355,17 @@ export default function App() {
               />
 
               <button
-                disabled={disabled || auctionEnded || !started}
+                disabled={disabled || auctionEnded || !started || loadingAction}
                 onClick={() => guardAction(() => placeBid(amount), "Bid")}
-                style={(disabled || auctionEnded || !started) ? btnStyleDisabled : btnStyle}
+                style={(disabled || auctionEnded || !started || loadingAction) ? btnStyleDisabled : btnStyle}
               >
                 Place Bid
               </button>
 
               <button
-                disabled={disabled || !auctionEnded}
+                disabled={disabled || !auctionEnded || loadingAction}
                 onClick={() => guardAction(claimTokens, "Claim")}
-                style={(disabled || !auctionEnded) ? btnStyleDisabled : btnStyle}
+                style={(disabled || !auctionEnded || loadingAction) ? btnStyleDisabled : btnStyle}
               >
                 Claim Tokens
               </button>
@@ -371,17 +376,17 @@ export default function App() {
           {isSeller && (
             <>
               <button
-                disabled={disabled || started}
+                disabled={disabled || started || loadingAction}
                 onClick={() => guardAction(startAuction, "Auction started")}
-                style={(disabled || started) ? btnStyleDisabled : btnStyle}
+                style={(disabled || started || loadingAction) ? btnStyleDisabled : btnStyle}
               >
                 🟢 Start Auction
               </button>
 
               <button
-                disabled={disabled || auctionEnded || (computedRemaining > 0)}
+                disabled={disabled || auctionEnded || (computedRemaining > 0) || loadingAction}
                 onClick={() => guardAction(endAuction, "Auction ended")}
-                style={(disabled || auctionEnded || computedRemaining > 0) ? btnStyleDisabled : btnStyle}
+                style={(disabled || auctionEnded || computedRemaining > 0 || loadingAction) ? btnStyleDisabled : btnStyle}
                 title={computedRemaining > 0 ? "Can only end after 20 minutes or when sold out" : "End auction and set clearing price"}
               >
                 🛑 End Auction
@@ -389,18 +394,18 @@ export default function App() {
 
               {/*Burn & Withdraw — enabled only after auction ends */}
               <button
-                disabled={disabled || !auctionEnded}
+                disabled={disabled || !auctionEnded || loadingAction}
                 onClick={() => guardAction(burnUnsoldTokens, "Burned unsold tokens")}
-                style={(disabled || !auctionEnded) ? btnStyleDisabled : btnStyle}
+                style={(disabled || !auctionEnded || loadingAction) ? btnStyleDisabled : btnStyle}
                 title="Burn remaining sale tokens held by the auction contract"
               >
                 🔥 Burn Unsold Tokens
               </button>
 
               <button
-                disabled={disabled || !auctionEnded}
+                disabled={disabled || !auctionEnded || loadingAction}
                 onClick={() => guardAction(withdrawFunds, "Withdrew ETH")}
-                style={(disabled || !auctionEnded) ? btnStyleDisabled : btnStyle}
+                style={(disabled || !auctionEnded || loadingAction) ? btnStyleDisabled : btnStyle}
                 title="Withdraw the ETH raised to the seller wallet"
               >
                 💸 Withdraw ETH
@@ -408,6 +413,10 @@ export default function App() {
             </>
           )}
         </div>
+
+        {
+          loadingAction && <LinearProgress sx={{ marginTop: 1 }} />
+        }
 
         <div style={{ marginTop: 24, fontSize: 13, opacity: 0.75 }}>
           <p>
