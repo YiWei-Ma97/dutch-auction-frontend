@@ -1,11 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
 import { Toaster, toast } from "react-hot-toast";
-import { ethers } from "ethers";
-import { useAuction } from "../hooks/useAuction";
-import { SEPOLIA_CHAIN_ID } from "../config";
+import { ethers, BrowserProvider } from "ethers";
+import { useAuction } from "../hooks/useAuction"; 
+import { SEPOLIA_CHAIN_ID, DEFAULT_AUCTION_ADDRESS } from "../config"; 
 import LinearProgress from '@mui/material/LinearProgress';
+import { CreateAuction } from '../components/CreateAuction';
 
 export default function App() {
+  const getInitialAuction = () => {
+    const savedAddress = localStorage.getItem("currentAuctionAddress");
+    if (savedAddress && ethers.isAddress(savedAddress)) {
+      return savedAddress;
+    }
+    return DEFAULT_AUCTION_ADDRESS; 
+  }
+
+  const [currentAuctionAddress, setCurrentAuctionAddress] = 
+    useState<string | null>(getInitialAuction());
+
+  const [account, setAccount] = useState<string | null>(null);
+  const [networkOk, setNetworkOk] = useState<boolean>(false);
+  const [amount, setAmount] = useState("");
+  const [provider, setProvider] = useState<BrowserProvider | null>(null);
   const {
     currentPrice,
     timeRemaining,
@@ -29,16 +45,13 @@ export default function App() {
     startAuction,
     burnUnsoldTokens,   
     withdrawFunds       
-  } = useAuction();
-
-  const [account, setAccount] = useState<string | null>(null);
-  const [networkOk, setNetworkOk] = useState<boolean>(false);
-  const [amount, setAmount] = useState("");
+  } = useAuction(currentAuctionAddress, provider); 
 
   const disabled = !account || !networkOk;
 
-  // Check if connected account is the seller
   const isSeller = !!(account && seller && account.toLowerCase() === seller.toLowerCase());
+  const ADMIN_ADDRESS = "0x0c4b187a09089a1926e1ae571f3458a28e6475e8";
+  const isGlobalAdmin = !!(account && account.toLowerCase() === ADMIN_ADDRESS.toLowerCase());
 
   const [computedRemaining, setComputedRemaining] = useState<number>(0);
   const [loadingAction, setLoadingAction] = useState(false);
@@ -55,19 +68,18 @@ export default function App() {
     return () => clearInterval(id);
   }, [startTime, auctionDuration]);
 
-  // Live ticking countdown
-  const [tick, setTick] = useState(0);
+  const [tick, setTick] = useState(0); 
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(id);
   }, []);
 
-  // 🦊 Connect wallet
   async function connectWallet() {
     if (!(window as any).ethereum)
       return toast.error("Please install MetaMask to continue.");
     try {
       const provider = new ethers.BrowserProvider((window as any).ethereum);
+      setProvider(provider); 
       const accounts = await provider.send("eth_requestAccounts", []);
       const network = await provider.getNetwork();
       setAccount(accounts[0] || null);
@@ -83,7 +95,6 @@ export default function App() {
     }
   }
 
-  // 🌐 Switch to Sepolia
   async function switchToSepolia() {
     const ethereum = (window as any).ethereum;
     if (!ethereum) return toast.error("MetaMask not detected.");
@@ -121,7 +132,6 @@ export default function App() {
     }
   }
 
-  // Detect wallet/network changes
   useEffect(() => {
     if (!(window as any).ethereum) return;
     const eth = (window as any).ethereum;
@@ -158,12 +168,12 @@ export default function App() {
     };
   }, [account, refreshStatus]);
 
-  // 🧭 On page load, check if already connected
   useEffect(() => {
     async function checkConnection() {
       if (!(window as any).ethereum) return;
       try {
         const provider = new ethers.BrowserProvider((window as any).ethereum);
+        setProvider(provider);
         const accounts = await provider.send("eth_accounts", []);
         const network = await provider.getNetwork();
         if (accounts.length > 0) {
@@ -179,12 +189,10 @@ export default function App() {
     checkConnection();
   }, []);
 
-  // Helper formatters
   const fmtEth = (v?: string) => (v ? `${Number(v).toFixed(4)} ETH` : "—");
   const fmtTok = (v?: string) =>
     v ? `${Number(v).toLocaleString(undefined, { maximumFractionDigits: 4 })} ${tokenSymbol ?? ""}` : "—";
 
-  // 🔔 Show toast when trying to interact while not connected
   const guardAction = async (fn: () => Promise<any>, label: string) => {
     if (!account) return toast.error("Please connect your wallet first 🦊");
     if (!networkOk) return toast.error("Please switch to Sepolia Testnet 🌐");
@@ -204,13 +212,20 @@ export default function App() {
     <div>
       <Toaster position="top-right" />
       <main style={{ maxWidth: 1000, margin: "0 auto", padding: "24px 18px" }}>
+        
+        {/* --- DEBUGGING LINES --- */}
+        <div style={{ padding: '10px', backgroundColor: '#333', color: 'white', marginBottom: '16px' }}>
+          <p>My Connected Account: {account?.toLowerCase()}</p>
+          <p>My Admin Address: {ADMIN_ADDRESS.toLowerCase()}</p>
+          <p style={{wordBreak: 'break-all'}}>Current Auction Address: {currentAuctionAddress}</p>
+        </div>
+
         <h1 style={{ margin: "8px 0 12px 0", fontSize: 26 }}>Dutch Auction</h1>
         <p style={{ opacity: 0.8, marginTop: 0, fontSize: 14 }}>
           A 20-minute descending-price sale. Connect on Sepolia and place a bid
           with ETH. Everyone settles at the clearing price.
         </p>
 
-        {/* ---- Wallet Connection Section ---- */}
         {!account ? (
           <button onClick={connectWallet} style={btnStyle}>
             🦊 Connect Wallet
@@ -251,7 +266,7 @@ export default function App() {
                   padding: "2px 6px",
                 }}
               >
-                👑 Admin
+                👑 Auction Admin
               </span>
             )}
             {networkOk ? (
@@ -331,12 +346,9 @@ export default function App() {
           <Card title="My Token Bal" value={fmtTok(myTokenBal)} />
         </section>
 
-        {/* ===== Actions Row ===== */}
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 20 }}>
-
-          {/* Buyer UI (non-admin) */}
-          {!isSeller && (
-            <>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, flexWrap: "wrap", marginTop: 20 }}>
+          {!isGlobalAdmin && (
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <input
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
@@ -353,7 +365,6 @@ export default function App() {
                 }}
                 disabled={disabled}
               />
-
               <button
                 disabled={disabled || auctionEnded || !started || loadingAction}
                 onClick={() => guardAction(() => placeBid(amount), "Bid")}
@@ -361,7 +372,6 @@ export default function App() {
               >
                 Place Bid
               </button>
-
               <button
                 disabled={disabled || !auctionEnded || loadingAction}
                 onClick={() => guardAction(claimTokens, "Claim")}
@@ -369,47 +379,56 @@ export default function App() {
               >
                 Claim Tokens
               </button>
-            </>
+            </div>
           )}
 
-          {/* Admin UI (seller only) */}
-          {isSeller && (
+          {isGlobalAdmin && (
             <>
-              <button
-                disabled={disabled || started || loadingAction}
-                onClick={() => guardAction(startAuction, "Auction started")}
-                style={(disabled || started || loadingAction) ? btnStyleDisabled : btnStyle}
-              >
-                🟢 Start Auction
-              </button>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <button
+                  disabled={!isSeller || disabled || started || loadingAction}
+                  onClick={() => guardAction(startAuction, "Auction started")}
+                  style={(!isSeller || disabled || started || loadingAction) ? btnStyleDisabled : btnStyle}
+                >
+                  🟢 Start Auction
+                </button>
 
-              <button
-                disabled={disabled || auctionEnded || (computedRemaining > 0) || loadingAction}
-                onClick={() => guardAction(endAuction, "Auction ended")}
-                style={(disabled || auctionEnded || computedRemaining > 0 || loadingAction) ? btnStyleDisabled : btnStyle}
-                title={computedRemaining > 0 ? "Can only end after 20 minutes or when sold out" : "End auction and set clearing price"}
-              >
-                🛑 End Auction
-              </button>
+                <button
+                  disabled={!isSeller || disabled || auctionEnded || (computedRemaining > 0) || loadingAction}
+                  onClick={() => guardAction(endAuction, "Auction ended")}
+                  style={(!isSeller || disabled || auctionEnded || computedRemaining > 0 || loadingAction) ? btnStyleDisabled : btnStyle}
+                  title={computedRemaining > 0 ? "Can only end after 20 minutes or when sold out" : "End auction and set clearing price"}
+                >
+                  🛑 End Auction
+                </button>
 
-              {/*Burn & Withdraw — enabled only after auction ends */}
-              <button
-                disabled={disabled || !auctionEnded || loadingAction}
-                onClick={() => guardAction(burnUnsoldTokens, "Burned unsold tokens")}
-                style={(disabled || !auctionEnded || loadingAction) ? btnStyleDisabled : btnStyle}
-                title="Burn remaining sale tokens held by the auction contract"
-              >
-                🔥 Burn Unsold Tokens
-              </button>
+                <button
+                  disabled={!isSeller || disabled || !auctionEnded || loadingAction}
+                  onClick={() => guardAction(burnUnsoldTokens, "Burned unsold tokens")}
+                  style={(!isSeller || disabled || !auctionEnded || loadingAction) ? btnStyleDisabled : btnStyle}
+                  title="Burn remaining sale tokens held by the auction contract"
+                >
+                  🔥 Burn Unsold Tokens
+                </button>
 
-              <button
-                disabled={disabled || !auctionEnded || loadingAction}
-                onClick={() => guardAction(withdrawFunds, "Withdrew ETH")}
-                style={(disabled || !auctionEnded || loadingAction) ? btnStyleDisabled : btnStyle}
-                title="Withdraw the ETH raised to the seller wallet"
-              >
-                💸 Withdraw ETH
-              </button>
+                <button
+                  disabled={!isSeller || disabled || !auctionEnded || loadingAction}
+                  onClick={() => guardAction(withdrawFunds, "Withdrew ETH")}
+                  style={(!isSeller || disabled || !auctionEnded || loadingAction) ? btnStyleDisabled : btnStyle}
+                  title="Withdraw the ETH raised to the seller wallet"
+                >
+                  💸 Withdraw ETH
+                </button>
+              </div>
+
+              <CreateAuction 
+                provider={provider} 
+                onAuctionCreated={(newAuctionAddress) => {
+                  localStorage.setItem("currentAuctionAddress", newAuctionAddress);
+                  setCurrentAuctionAddress(newAuctionAddress);
+                  toast.success("New auction loaded!");
+                }} 
+              />
             </>
           )}
         </div>

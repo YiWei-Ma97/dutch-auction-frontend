@@ -1,10 +1,32 @@
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './pages/App';
+import { Toaster } from 'react-hot-toast';
 
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import App from './pages/App'
+import '@rainbow-me/rainbowkit/styles.css';
+import { getDefaultConfig, RainbowKitProvider } from '@rainbow-me/rainbowkit';
+import { WagmiProvider } from 'wagmi';
+import { sepolia } from 'wagmi/chains'; // Use Sepolia, as per your deploy script
+import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
+
+const config = getDefaultConfig({
+  appName: 'Dutch Auction',
+  projectId: 'c99cacf7bee9eeaa8ccff0ab7049de7f', // <-- Get this from https://cloud.walletconnect.com
+  chains: [sepolia],
+  ssr: false, // We are not doing server-side rendering
+});
+
+const queryClient = new QueryClient();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
-  </React.StrictMode>
-)
+    <WagmiProvider config={config}>
+      <QueryClientProvider client={queryClient}>
+        <RainbowKitProvider>
+          <App />
+          <Toaster />
+        </RainbowKitProvider>
+      </QueryClientProvider>
+    </WagmiProvider>
+  </React.StrictMode>,
+);
