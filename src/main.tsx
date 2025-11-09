@@ -1,7 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './pages/App';
-import { Toaster } from 'react-hot-toast';
 
 import '@rainbow-me/rainbowkit/styles.css';
 import { getDefaultConfig, RainbowKitProvider } from '@rainbow-me/rainbowkit';
@@ -24,7 +23,6 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <QueryClientProvider client={queryClient}>
         <RainbowKitProvider>
           <App />
-          <Toaster />
         </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>

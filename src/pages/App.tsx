@@ -50,7 +50,7 @@ export default function App() {
   const disabled = !account || !networkOk;
 
   const isSeller = !!(account && seller && account.toLowerCase() === seller.toLowerCase());
-  const ADMIN_ADDRESS = "0x0c4b187a09089a1926e1ae571f3458a28e6475e8";
+  const ADMIN_ADDRESS = "0xc12f5b378f724f3f4dda4121d82844d6b42210e1";
   const isGlobalAdmin = !!(account && account.toLowerCase() === ADMIN_ADDRESS.toLowerCase());
 
   const [computedRemaining, setComputedRemaining] = useState<number>(0);
@@ -213,12 +213,125 @@ export default function App() {
       <Toaster position="top-right" />
       <main style={{ maxWidth: 1000, margin: "0 auto", padding: "24px 18px" }}>
         
-        {/* --- DEBUGGING LINES --- */}
-        <div style={{ padding: '10px', backgroundColor: '#333', color: 'white', marginBottom: '16px' }}>
-          <p>My Connected Account: {account?.toLowerCase()}</p>
-          <p>My Admin Address: {ADMIN_ADDRESS.toLowerCase()}</p>
-          <p style={{wordBreak: 'break-all'}}>Current Auction Address: {currentAuctionAddress}</p>
+              {/* top status strip */}
+      <div
+        style={{
+          display: "flex",
+          gap: 12,
+          flexWrap: "wrap",
+          alignItems: "stretch",
+          marginBottom: 18,
+        }}
+      >
+        {/* connected account */}
+        <div
+          style={{
+            flex: "1 1 240px",
+            background: "#0e1621",
+            border: "1px solid #1f2630",
+            borderRadius: 12,
+            padding: "10px 12px",
+          }}
+        >
+          <div style={{ fontSize: 11, opacity: 0.6, marginBottom: 4 }}>Connected wallet</div>
+          <div
+            style={{
+              display: "flex",
+              gap: 6,
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "monospace",
+                fontSize: 13,
+                wordBreak: "break-all",
+              }}
+            >
+              {account ? `${account.slice(0, 8)}...${account.slice(-6)}` : "Not connected"}
+            </span>
+            {account && (
+              <span
+                style={{
+                  background: "#0b5cff22",
+                  border: "1px solid #0b5cff44",
+                  color: "#dbeafe",
+                  fontSize: 10,
+                  padding: "2px 6px",
+                  borderRadius: 999,
+                }}
+              >
+                you
+              </span>
+            )}
+          </div>
         </div>
+
+        {/* admin address */}
+        <div
+          style={{
+            flex: "1 1 240px",
+            background: "#0e1621",
+            border: "1px solid #1f2630",
+            borderRadius: 12,
+            padding: "10px 12px",
+          }}
+        >
+          <div style={{ fontSize: 11, opacity: 0.6, marginBottom: 4 }}>Global admin</div>
+          <div
+            style={{
+              display: "flex",
+              gap: 6,
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "monospace",
+                fontSize: 13,
+                wordBreak: "break-all",
+              }}
+            >
+              {`${ADMIN_ADDRESS.slice(0, 8)}...${ADMIN_ADDRESS.slice(-6)}`}
+            </span>
+            {account &&
+              account.toLowerCase() === ADMIN_ADDRESS.toLowerCase() && (
+                <span
+                  style={{
+                    background: "#22c55e22",
+                    border: "1px solid #22c55e44",
+                    color: "#dcfce7",
+                    fontSize: 10,
+                    padding: "2px 6px",
+                    borderRadius: 999,
+                  }}
+                >
+                  you
+                </span>
+              )}
+          </div>
+        </div>
+
+        {/* current auction address */}
+        <div
+          style={{
+            flex: "1 1 280px",
+            background: "#0e1621",
+            border: "1px solid #1f2630",
+            borderRadius: 12,
+            padding: "10px 12px",
+          }}
+        >
+          <div style={{ fontSize: 11, opacity: 0.6, marginBottom: 4 }}>Current auction</div>
+          <div style={{ fontFamily: "monospace", fontSize: 13, wordBreak: "break-all" }}>
+            {currentAuctionAddress
+              ? `${currentAuctionAddress.slice(0, 10)}...${currentAuctionAddress.slice(-6)}`
+              : "—"}
+          </div>
+        </div>
+      </div>
 
         <h1 style={{ margin: "8px 0 12px 0", fontSize: 26 }}>Dutch Auction</h1>
         <p style={{ opacity: 0.8, marginTop: 0, fontSize: 14 }}>
@@ -408,7 +521,7 @@ export default function App() {
                   style={(!isSeller || disabled || !auctionEnded || loadingAction) ? btnStyleDisabled : btnStyle}
                   title="Burn remaining sale tokens held by the auction contract"
                 >
-                  🔥 Burn Unsold Tokens
+                   Burn Unsold Tokens
                 </button>
 
                 <button
@@ -417,10 +530,17 @@ export default function App() {
                   style={(!isSeller || disabled || !auctionEnded || loadingAction) ? btnStyleDisabled : btnStyle}
                   title="Withdraw the ETH raised to the seller wallet"
                 >
-                  💸 Withdraw ETH
+                   Withdraw ETH
                 </button>
               </div>
 
+              {isSeller && auctionEnded && (
+                <p style={{ color: "orange", fontSize: 12, marginTop: 6 }}>
+                  ⚠️ Wait for bidders to claim before withdrawing ETH to avoid refund reverts.
+                </p>
+              )}
+
+            {(!started || auctionEnded) && (
               <CreateAuction 
                 provider={provider} 
                 onAuctionCreated={(newAuctionAddress) => {
@@ -429,6 +549,7 @@ export default function App() {
                   toast.success("New auction loaded!");
                 }} 
               />
+            )}
             </>
           )}
         </div>
@@ -436,27 +557,6 @@ export default function App() {
         {
           loadingAction && <LinearProgress sx={{ marginTop: 1 }} />
         }
-
-        <div style={{ marginTop: 24, fontSize: 13, opacity: 0.75 }}>
-          <p>
-            Etherscan:{" "}
-            <a
-              href="https://sepolia.etherscan.io/address/0x47f8f48Fc99DEfc2A3D3655Aea02DE678030742e#code"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Auction
-            </a>{" "}
-            •{" "}
-            <a
-              href="https://sepolia.etherscan.io/address/0x61df7fFF1F7c9e0F66c733E4B119b6C1FE7B0a74#code"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Token
-            </a>
-          </p>
-        </div>
       </main>
     </div>
   );
